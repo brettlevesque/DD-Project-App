@@ -13,9 +13,15 @@ In a real-world scenario without Datadog, teams often:
 
 import logging
 import sys
+import os
 import json
 from datetime import datetime
 from typing import Any, Optional
+from logging.handlers import RotatingFileHandler
+
+# Log directory and file
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+LOG_FILE = os.path.join(LOG_DIR, 'tradesim.log')
 
 # Custom formatter for structured logging
 class StructuredFormatter(logging.Formatter):
@@ -73,9 +79,25 @@ class SimpleFormatter(logging.Formatter):
         return base
 
 
+class FileFormatter(logging.Formatter):
+    """
+    Plain text formatter for log files (no colors).
+    This is what teams grep through when debugging production issues.
+    """
+    
+    def format(self, record):
+        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        return f"{timestamp} {record.levelname:8} | {record.getMessage()}"
+
+
 def setup_logging(json_format: bool = False) -> logging.Logger:
     """
-    Setup the application logger.
+    Setup the application logger with both console and file output.
+    
+    This demonstrates the manual logging setup teams do without Datadog:
+    - Console output for development
+    - File output for production debugging (grep through logs!)
+    - Rotating files to manage disk space
     
     Args:
         json_format: If True, output JSON logs. If False, human-readable.
@@ -89,7 +111,7 @@ def setup_logging(json_format: bool = False) -> logging.Logger:
     # Clear any existing handlers
     logger.handlers.clear()
     
-    # Console handler
+    # Console handler (colored output for development)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG)
     
@@ -99,6 +121,44 @@ def setup_logging(json_format: bool = False) -> logging.Logger:
         console_handler.setFormatter(SimpleFormatter())
     
     logger.addHandler(console_handler)
+    
+    # File handler (plain text for grep-ability)
+    # This is what teams rely on without proper log aggregation tools!
+    try:
+        # Create logs directory if it doesn't exist
+        os.makedirs(LOG_DIR, exist_ok=True)
+        
+        # Rotating file handler: 10MB max, keep 5 backups
+        file_handler = RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=10*1024*1024,  # 10 MB
+            backupCount=5,
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(FileFormatter())
+        logger.addHandler(file_handler)
+        
+        logger.info(f"[LOG] File logging enabled: {LOG_FILE}")
+    except Exception as e:
+        logger.warning(f"[LOG] Could not setup file logging: {e}")
+    
+    # Also add a JSON log file for structured logging demos
+    try:
+        json_log_file = os.path.join(LOG_DIR, 'tradesim.json.log')
+        json_handler = RotatingFileHandler(
+            json_log_file,
+            maxBytes=10*1024*1024,
+            backupCount=5,
+            encoding='utf-8'
+        )
+        json_handler.setLevel(logging.DEBUG)
+        json_handler.setFormatter(StructuredFormatter())
+        logger.addHandler(json_handler)
+        
+        logger.info(f"[LOG] JSON logging enabled: {json_log_file}")
+    except Exception as e:
+        logger.warning(f"[LOG] Could not setup JSON file logging: {e}")
     
     return logger
 
