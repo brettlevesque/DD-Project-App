@@ -200,6 +200,8 @@ async function fetchAllStockHistories() {
     try {
         const data = await apiCall('/api/market/history/all?days=30');
         state.stockHistories = data.histories;
+        console.log('Stock histories loaded:', Object.keys(state.stockHistories).length, 'stocks');
+        console.log('Sample DDOG history:', state.stockHistories['DDOG']?.slice(0, 5));
         renderStocks(); // Re-render with charts
     } catch (error) {
         log(`Failed to fetch stock histories: ${error.message}`, 'warning');
@@ -322,48 +324,32 @@ function renderStocks() {
     elements.stockGrid.innerHTML = state.stocks.map(stock => {
         const isDatadog = stock.symbol === 'DDOG';
         const isCompetitor = CONFIG.COMPETITOR_SYMBOLS.includes(stock.symbol);
-        const changeClass = stock.daily_change >= 0 ? 'positive' : 'negative';
-        const changeIcon = stock.daily_change >= 0 ? '▲' : '▼';
         const totalChangeClass = stock.total_change_pct >= 0 ? 'positive' : 'negative';
+        const changeIcon = stock.total_change_pct >= 0 ? '▲' : '▼';
         
-        // Generate the large chart for the card
+        // Generate the chart for the card background
         const chartSvg = generateCardChart(stock.symbol, stock.total_change_pct >= 0);
-        
-        // Get price range from history
-        const priceRange = getPriceRange(stock.symbol);
         
         return `
             <div class="stock-card ${isDatadog ? 'datadog' : ''} ${isCompetitor ? 'competitor' : ''}" 
                  onclick="openTradeModal('${stock.symbol}')">
-                <div class="stock-header">
-                    <span class="stock-symbol">${stock.symbol}</span>
-                    <span class="stock-change-badge ${changeClass}">
-                        ${changeIcon} ${stock.daily_change_pct >= 0 ? '+' : ''}${stock.daily_change_pct.toFixed(2)}%
-                    </span>
-                </div>
-                <div class="stock-name">${stock.name}</div>
                 
-                <div class="stock-card-chart">
+                <div class="stock-card-chart-bg">
                     ${chartSvg}
                 </div>
                 
-                <div class="stock-price-row">
-                    <div class="stock-current-price">$${stock.price.toFixed(2)}</div>
-                    <div class="stock-performance ${totalChangeClass}">
-                        ${stock.total_change_pct >= 0 ? '+' : ''}${stock.total_change_pct.toFixed(1)}% <span class="perf-label">30d</span>
+                <div class="stock-card-overlay">
+                    <div class="stock-card-top">
+                        <span class="stock-symbol">${stock.symbol}</span>
+                        <span class="stock-change-badge ${totalChangeClass}">
+                            ${changeIcon} ${stock.total_change_pct >= 0 ? '+' : ''}${stock.total_change_pct.toFixed(1)}%
+                        </span>
                     </div>
-                </div>
-                
-                ${priceRange ? `
-                <div class="stock-range">
-                    <span class="range-label">30d Range:</span>
-                    <span class="range-values">$${priceRange.min.toFixed(2)} — $${priceRange.max.toFixed(2)}</span>
-                </div>
-                ` : ''}
-                
-                <div class="stock-actions">
-                    <button class="btn btn-success btn-small" onclick="event.stopPropagation(); openTradeModal('${stock.symbol}', 'buy')">📈 Buy</button>
-                    <button class="btn btn-danger btn-small" onclick="event.stopPropagation(); openTradeModal('${stock.symbol}', 'sell')">📉 Sell</button>
+                    
+                    <div class="stock-card-bottom">
+                        <span class="stock-current-price">$${stock.price.toFixed(2)}</span>
+                        <span class="stock-name-small">${stock.name}</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -383,15 +369,22 @@ function getPriceRange(symbol) {
 function generateCardChart(symbol, isPositive) {
     const prices = state.stockHistories[symbol];
     
+    // Show loading state if no data
     if (!prices || prices.length < 2) {
-        return `<div class="chart-loading">
-            <div class="chart-loading-text">Loading chart...</div>
-        </div>`;
+        const color = isPositive ? '#10b981' : '#ef4444';
+        const bgColor = isPositive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+        return `
+            <div class="chart-placeholder" style="background: ${bgColor}; color: ${color};">
+                📊
+            </div>
+        `;
     }
     
-    const width = 220;
-    const height = 80;
-    const padding = 4;
+    const width = 300;
+    const height = 120;
+    const paddingX = 0;
+    const paddingTop = 30;  // Leave space at top for text
+    const paddingBottom = 30;  // Leave space at bottom for text
     
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
@@ -399,37 +392,33 @@ function generateCardChart(symbol, isPositive) {
     
     // Generate points for the line
     const points = prices.map((price, i) => {
-        const x = padding + (i / (prices.length - 1)) * (width - 2 * padding);
-        const y = height - padding - ((price - minPrice) / range) * (height - 2 * padding);
+        const x = paddingX + (i / (prices.length - 1)) * (width - 2 * paddingX);
+        const y = paddingTop + ((maxPrice - price) / range) * (height - paddingTop - paddingBottom);
         return { x, y };
     });
     
-    const linePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+    const linePoints = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
     
     const strokeColor = isPositive ? '#10b981' : '#ef4444';
-    const gradientId = `gradient-${symbol}`;
-    const gradientStart = isPositive ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+    const gradientId = `grad-${symbol}-${Date.now()}`;
+    const gradientStart = isPositive ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)';
     const gradientEnd = isPositive ? 'rgba(16, 185, 129, 0)' : 'rgba(239, 68, 68, 0)';
     
-    // Create area path
+    // Create area points for filled polygon (fill to bottom)
     const firstPoint = points[0];
     const lastPoint = points[points.length - 1];
-    const areaPath = `M ${firstPoint.x},${height - padding} L ${linePoints.replace(/,/g, ' L ').replace(/ L /g, (m, i) => i === 0 ? ' L ' : ',')} L ${lastPoint.x},${height - padding} Z`;
-    
-    // Simpler area points
-    const areaPoints = `${firstPoint.x},${height - padding} ${linePoints} ${lastPoint.x},${height - padding}`;
+    const areaPoints = `${firstPoint.x.toFixed(1)},${height} ${linePoints} ${lastPoint.x.toFixed(1)},${height}`;
     
     return `
         <svg class="card-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
             <defs>
                 <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" style="stop-color:${gradientStart}" />
-                    <stop offset="100%" style="stop-color:${gradientEnd}" />
+                    <stop offset="0%" stop-color="${gradientStart}" />
+                    <stop offset="100%" stop-color="${gradientEnd}" />
                 </linearGradient>
             </defs>
             <polygon points="${areaPoints}" fill="url(#${gradientId})" />
-            <polyline points="${linePoints}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <circle cx="${lastPoint.x}" cy="${lastPoint.y}" r="3" fill="${strokeColor}" />
+            <polyline points="${linePoints}" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
     `;
 }
@@ -897,19 +886,13 @@ async function init() {
             try {
                 await apiCall('/api/market/tick', { method: 'POST' });
                 await fetchStocks();
+                await fetchAllStockHistories(); // Keep charts updated
                 renderPortfolio(); // Update position values
             } catch (error) {
                 // Silent fail for auto-tick
             }
         }
     }, CONFIG.TICK_INTERVAL);
-    
-    // Refresh historical data periodically (every 30 seconds)
-    setInterval(async () => {
-        if (state.connected) {
-            await fetchAllStockHistories();
-        }
-    }, CONFIG.REFRESH_INTERVAL);
 }
 
 // Start the app
