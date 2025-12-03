@@ -12,7 +12,8 @@
 const CONFIG = {
     API_BASE: 'http://localhost:5000',
     USER_ID: 'demo',
-    REFRESH_INTERVAL: 30000, // 30 seconds
+    REFRESH_INTERVAL: 1000, // 30 seconds
+    TICK_INTERVAL: 1000,     // 1 second auto-tick
     COMPETITOR_SYMBOLS: ['SPLK', 'DT', 'NEWR', 'ESTC']
 };
 
@@ -22,6 +23,7 @@ const CONFIG = {
 
 const state = {
     stocks: [],
+    stockHistories: {},  // symbol -> array of prices for mini charts
     portfolio: null,
     trades: [],
     selectedStock: null,
@@ -194,6 +196,16 @@ async function fetchStocks() {
     }
 }
 
+async function fetchAllStockHistories() {
+    try {
+        const data = await apiCall('/api/market/history/all?days=30');
+        state.stockHistories = data.histories;
+        renderStocks(); // Re-render with charts
+    } catch (error) {
+        log(`Failed to fetch stock histories: ${error.message}`, 'warning');
+    }
+}
+
 async function fetchStockHistory(symbol) {
     try {
         const data = await apiCall(`/api/market/stocks/${symbol}/history?days=90`);
@@ -314,22 +326,41 @@ function renderStocks() {
         const changeIcon = stock.daily_change >= 0 ? '▲' : '▼';
         const totalChangeClass = stock.total_change_pct >= 0 ? 'positive' : 'negative';
         
+        // Generate the large chart for the card
+        const chartSvg = generateCardChart(stock.symbol, stock.total_change_pct >= 0);
+        
+        // Get price range from history
+        const priceRange = getPriceRange(stock.symbol);
+        
         return `
             <div class="stock-card ${isDatadog ? 'datadog' : ''} ${isCompetitor ? 'competitor' : ''}" 
                  onclick="openTradeModal('${stock.symbol}')">
                 <div class="stock-header">
                     <span class="stock-symbol">${stock.symbol}</span>
-                    <span class="stock-sector">${stock.sector.split(' - ')[1] || stock.sector}</span>
+                    <span class="stock-change-badge ${changeClass}">
+                        ${changeIcon} ${stock.daily_change_pct >= 0 ? '+' : ''}${stock.daily_change_pct.toFixed(2)}%
+                    </span>
                 </div>
                 <div class="stock-name">${stock.name}</div>
-                <div class="stock-price">$${stock.price.toFixed(2)}</div>
-                <div class="stock-change ${changeClass}">
-                    ${changeIcon} $${Math.abs(stock.daily_change).toFixed(2)} 
-                    (${stock.daily_change_pct >= 0 ? '+' : ''}${stock.daily_change_pct.toFixed(2)}%)
+                
+                <div class="stock-card-chart">
+                    ${chartSvg}
                 </div>
-                <div class="stock-total-change ${totalChangeClass}">
-                    90d: ${stock.total_change_pct >= 0 ? '+' : ''}${stock.total_change_pct.toFixed(1)}%
+                
+                <div class="stock-price-row">
+                    <div class="stock-current-price">$${stock.price.toFixed(2)}</div>
+                    <div class="stock-performance ${totalChangeClass}">
+                        ${stock.total_change_pct >= 0 ? '+' : ''}${stock.total_change_pct.toFixed(1)}% <span class="perf-label">30d</span>
+                    </div>
                 </div>
+                
+                ${priceRange ? `
+                <div class="stock-range">
+                    <span class="range-label">30d Range:</span>
+                    <span class="range-values">$${priceRange.min.toFixed(2)} — $${priceRange.max.toFixed(2)}</span>
+                </div>
+                ` : ''}
+                
                 <div class="stock-actions">
                     <button class="btn btn-success btn-small" onclick="event.stopPropagation(); openTradeModal('${stock.symbol}', 'buy')">📈 Buy</button>
                     <button class="btn btn-danger btn-small" onclick="event.stopPropagation(); openTradeModal('${stock.symbol}', 'sell')">📉 Sell</button>
@@ -337,6 +368,108 @@ function renderStocks() {
             </div>
         `;
     }).join('');
+}
+
+function getPriceRange(symbol) {
+    const prices = state.stockHistories[symbol];
+    if (!prices || prices.length < 2) return null;
+    
+    return {
+        min: Math.min(...prices),
+        max: Math.max(...prices)
+    };
+}
+
+function generateCardChart(symbol, isPositive) {
+    const prices = state.stockHistories[symbol];
+    
+    if (!prices || prices.length < 2) {
+        return `<div class="chart-loading">
+            <div class="chart-loading-text">Loading chart...</div>
+        </div>`;
+    }
+    
+    const width = 220;
+    const height = 80;
+    const padding = 4;
+    
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const range = maxPrice - minPrice || 1;
+    
+    // Generate points for the line
+    const points = prices.map((price, i) => {
+        const x = padding + (i / (prices.length - 1)) * (width - 2 * padding);
+        const y = height - padding - ((price - minPrice) / range) * (height - 2 * padding);
+        return { x, y };
+    });
+    
+    const linePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+    
+    const strokeColor = isPositive ? '#10b981' : '#ef4444';
+    const gradientId = `gradient-${symbol}`;
+    const gradientStart = isPositive ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
+    const gradientEnd = isPositive ? 'rgba(16, 185, 129, 0)' : 'rgba(239, 68, 68, 0)';
+    
+    // Create area path
+    const firstPoint = points[0];
+    const lastPoint = points[points.length - 1];
+    const areaPath = `M ${firstPoint.x},${height - padding} L ${linePoints.replace(/,/g, ' L ').replace(/ L /g, (m, i) => i === 0 ? ' L ' : ',')} L ${lastPoint.x},${height - padding} Z`;
+    
+    // Simpler area points
+    const areaPoints = `${firstPoint.x},${height - padding} ${linePoints} ${lastPoint.x},${height - padding}`;
+    
+    return `
+        <svg class="card-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+            <defs>
+                <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:${gradientStart}" />
+                    <stop offset="100%" style="stop-color:${gradientEnd}" />
+                </linearGradient>
+            </defs>
+            <polygon points="${areaPoints}" fill="url(#${gradientId})" />
+            <polyline points="${linePoints}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="${lastPoint.x}" cy="${lastPoint.y}" r="3" fill="${strokeColor}" />
+        </svg>
+    `;
+}
+
+function generateSparkline(symbol, isPositive) {
+    const prices = state.stockHistories[symbol];
+    
+    if (!prices || prices.length < 2) {
+        return '<div class="sparkline-placeholder">Loading...</div>';
+    }
+    
+    const width = 100;
+    const height = 40;
+    const padding = 2;
+    
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const range = maxPrice - minPrice || 1;
+    
+    // Generate points for the sparkline
+    const points = prices.map((price, i) => {
+        const x = padding + (i / (prices.length - 1)) * (width - 2 * padding);
+        const y = height - padding - ((price - minPrice) / range) * (height - 2 * padding);
+        return `${x},${y}`;
+    }).join(' ');
+    
+    const strokeColor = isPositive ? '#10b981' : '#ef4444';
+    const fillColor = isPositive ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+    
+    // Create area fill
+    const firstX = padding;
+    const lastX = padding + ((prices.length - 1) / (prices.length - 1)) * (width - 2 * padding);
+    const areaPoints = `${firstX},${height - padding} ${points} ${lastX},${height - padding}`;
+    
+    return `
+        <svg class="sparkline-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+            <polygon points="${areaPoints}" fill="${fillColor}" />
+            <polyline points="${points}" fill="none" stroke="${strokeColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+    `;
 }
 
 function renderPortfolio() {
@@ -743,6 +876,9 @@ async function init() {
             fetchTradeHistory()
         ]);
         
+        // Fetch historical data for mini charts
+        await fetchAllStockHistories();
+        
         // Set default balance if not set
         if (!state.portfolio?.cash_balance) {
             log('Setting default balance of $100,000', 'info');
@@ -750,15 +886,28 @@ async function init() {
         }
         
         log('✓ TradeSim ready! Click any stock to trade.', 'success');
+        log('📈 Market auto-updates every second', 'info');
     } catch (error) {
         log('Failed to initialize - is the backend running?', 'error');
     }
     
-    // Auto-refresh market data
+    // Auto-tick market prices every second
     setInterval(async () => {
         if (state.connected) {
-            await fetchStocks();
-            renderPortfolio(); // Update position values
+            try {
+                await apiCall('/api/market/tick', { method: 'POST' });
+                await fetchStocks();
+                renderPortfolio(); // Update position values
+            } catch (error) {
+                // Silent fail for auto-tick
+            }
+        }
+    }, CONFIG.TICK_INTERVAL);
+    
+    // Refresh historical data periodically (every 30 seconds)
+    setInterval(async () => {
+        if (state.connected) {
+            await fetchAllStockHistories();
         }
     }, CONFIG.REFRESH_INTERVAL);
 }

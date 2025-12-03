@@ -375,7 +375,7 @@ body {
 
 .stock-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: var(--space-md);
     padding: var(--space-md);
     overflow-y: auto;
@@ -391,6 +391,8 @@ body {
     transition: all var(--transition-fast);
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .stock-card:hover {
@@ -401,7 +403,7 @@ body {
 
 .stock-card.datadog {
     border-color: var(--accent-datadog);
-    background: linear-gradient(135deg, var(--bg-card), rgba(99, 44, 166, 0.1));
+    background: linear-gradient(135deg, var(--bg-card), rgba(99, 44, 166, 0.15));
 }
 
 .stock-card.datadog::before {
@@ -413,21 +415,39 @@ body {
 }
 
 .stock-card.competitor {
-    opacity: 0.85;
+    opacity: 0.9;
 }
 
 .stock-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: var(--space-md);
+    align-items: center;
+    margin-bottom: var(--space-xs);
 }
 
 .stock-symbol {
     font-family: var(--font-mono);
-    font-size: 1.125rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--text-primary);
+}
+
+.stock-change-badge {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+}
+
+.stock-change-badge.positive {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--accent-success);
+}
+
+.stock-change-badge.negative {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--accent-danger);
 }
 
 .stock-sector {
@@ -442,17 +462,94 @@ body {
 .stock-name {
     font-size: 0.75rem;
     color: var(--text-secondary);
-    margin-bottom: var(--space-md);
+    margin-bottom: var(--space-sm);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.stock-price {
+/* Stock Card Chart */
+.stock-card-chart {
+    width: 100%;
+    height: 80px;
+    margin: var(--space-sm) 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-tertiary);
+}
+
+.card-chart-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.chart-loading {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* Stock Price Row */
+.stock-price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin: var(--space-sm) 0;
+}
+
+.stock-current-price {
     font-family: var(--font-mono);
     font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.stock-performance {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
     font-weight: 600;
-    margin-bottom: var(--space-xs);
+}
+
+.stock-performance.positive {
+    color: var(--accent-success);
+}
+
+.stock-performance.negative {
+    color: var(--accent-danger);
+}
+
+.perf-label {
+    font-size: 0.625rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+/* Stock Range */
+.stock-range {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.625rem;
+    color: var(--text-muted);
+    padding: var(--space-xs) 0;
+    border-top: 1px solid var(--border-primary);
+    margin-bottom: var(--space-sm);
+}
+
+.range-values {
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+}
+
+.stock-price {
+    font-family: var(--font-mono);
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.2;
 }
 
 .stock-change {
@@ -460,7 +557,8 @@ body {
     align-items: center;
     gap: var(--space-xs);
     font-family: var(--font-mono);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    margin-top: 2px;
 }
 
 .stock-change.positive {
@@ -471,18 +569,26 @@ body {
     color: var(--accent-danger);
 }
 
-.stock-total-change {
-    font-size: 0.75rem;
-    font-family: var(--font-mono);
-    margin-top: var(--space-xs);
+/* Mini sparkline (used in modal) */
+.mini-chart {
+    width: 100px;
+    height: 40px;
+    flex-shrink: 0;
 }
 
-.stock-total-change.positive {
-    color: var(--accent-success);
+.sparkline-svg {
+    width: 100%;
+    height: 100%;
 }
 
-.stock-total-change.negative {
-    color: var(--accent-danger);
+.sparkline-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.625rem;
+    color: var(--text-muted);
 }
 
 .stock-actions {

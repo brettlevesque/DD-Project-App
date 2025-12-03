@@ -189,7 +189,12 @@ def set_balance(user_id):
     if not data or 'balance' not in data:
         return jsonify({'error': 'Balance required'}), 400
     
-    result = portfolio_service.set_balance(user_id, data['balance'])
+    balance = data['balance']
+    
+    # Sync balance across services (this is a common issue without proper tooling!)
+    result = portfolio_service.set_balance(user_id, balance)
+    fund_service.set_balance(user_id, balance)  # Keep fund service in sync
+    
     return jsonify(result), 200
 
 # ============================================
@@ -222,6 +227,20 @@ def get_stock_history(symbol):
         return jsonify({'symbol': symbol.upper(), 'history': history}), 200
     else:
         return jsonify({'error': f'Stock {symbol} not found'}), 404
+
+@app.route('/api/market/history/all', methods=['GET'])
+def get_all_stock_histories():
+    """Get price history for all stocks (for mini charts)"""
+    days = request.args.get('days', 30, type=int)
+    histories = {}
+    
+    for symbol in market_service.STOCKS.keys():
+        history = market_service.get_price_history(symbol, days)
+        if history:
+            # Return simplified data for mini charts (just close prices)
+            histories[symbol] = [h['close'] for h in history]
+    
+    return jsonify({'histories': histories, 'days': days}), 200
 
 @app.route('/api/market/tick', methods=['POST'])
 def market_tick():
@@ -284,6 +303,7 @@ def buy_stock():
         # Step 5: Update portfolio
         portfolio_service.add_position(user_id, symbol, quantity, stock['price'])
         portfolio_service.deduct_balance(user_id, total_cost)
+        fund_service.deduct_balance(user_id, total_cost)  # Keep fund service in sync
         
         # Step 6: Send confirmation email
         email_service.send_trade_confirmation(user_id, trade_result['trade'])
@@ -334,6 +354,7 @@ def sell_stock():
         # Step 5: Update portfolio
         portfolio_service.reduce_position(user_id, symbol, quantity)
         portfolio_service.add_balance(user_id, total_value)
+        fund_service.add_balance(user_id, total_value)  # Keep fund service in sync
         
         # Step 6: Send confirmation email
         email_service.send_trade_confirmation(user_id, trade_result['trade'])
