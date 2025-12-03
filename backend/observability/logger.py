@@ -302,4 +302,3 @@ class ServiceLogger:
     
     def mark_failed(self):
         self.success = False
-
