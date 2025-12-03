@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeSim - Trading Platform Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <span class="logo-icon">📈</span>
+                    <span class="logo-text">TradeSim</span>
+                </div>
+                <span class="tagline">Demo Trading Platform</span>
+            </div>
+            <div class="header-center">
+                <div class="market-status" id="marketStatus">
+                    <span class="status-dot"></span>
+                    <span>Market Open</span>
+                </div>
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot error"></span>
+                    <span>Connecting...</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info" id="userInfo">
+                    <span class="user-name" id="userName">Demo User</span>
+                    <span class="user-balance" id="userBalance">$0.00</span>
+                </div>
+                <button class="btn btn-ghost" id="metricsBtn" title="View Metrics">
+                    📊 Metrics
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Left Panel - Portfolio -->
+            <aside class="panel portfolio-panel">
+                <div class="panel-header">
+                    <h2>Portfolio</h2>
+                    <button class="btn btn-small btn-primary" id="setBalanceBtn">💰 Set Balance</button>
+                </div>
+                
+                <div class="portfolio-summary">
+                    <div class="stat-card">
+                        <span class="stat-label">Total Value</span>
+                        <span class="stat-value" id="portfolioValue">$0.00</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Cash Available</span>
+                        <span class="stat-value" id="cashBalance">$0.00</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Positions Value</span>
+                        <span class="stat-value" id="positionsValue">$0.00</span>
+                    </div>
+                </div>
+
+                <div class="positions-section">
+                    <h3>Your Positions <span class="hint">(click to sell)</span></h3>
+                    <div class="positions-list" id="positionsList">
+                        <div class="empty-state">No positions yet<br><small>Buy some stocks to get started!</small></div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center Panel - Stock List & Trading -->
+            <section class="panel main-panel">
+                <div class="panel-header">
+                    <h2>📊 Markets</h2>
+                    <div class="market-controls">
+                        <button class="btn btn-small" id="refreshMarket">🔄 Refresh</button>
+                        <button class="btn btn-small btn-accent" id="tickMarket">⚡ Simulate Tick</button>
+                    </div>
+                </div>
+                
+                <div class="trading-hint">
+                    <span>💡 Click any stock card to trade</span>
+                </div>
+
+                <div class="stock-grid" id="stockGrid">
+                    <!-- Stock cards will be populated here -->
+                    <div class="loading">Loading market data...<br><small>Make sure the backend is running on port 5000</small></div>
+                </div>
+            </section>
+
+            <!-- Right Panel - Trade History & Activity -->
+            <aside class="panel activity-panel">
+                <div class="panel-header">
+                    <h2>Recent Activity</h2>
+                </div>
+                
+                <div class="activity-tabs">
+                    <button class="tab active" data-tab="trades">Trades</button>
+                    <button class="tab" data-tab="logs">System Logs</button>
+                </div>
+
+                <div class="activity-content">
+                    <div class="tab-content active" id="tradesTab">
+                        <div class="trades-list" id="tradesList">
+                            <div class="empty-state">No trades yet<br><small>Execute your first trade!</small></div>
+                        </div>
+                    </div>
+                    <div class="tab-content" id="logsTab">
+                        <div class="logs-list" id="logsList">
+                            <div class="log-entry info">System initialized</div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Trading Modal -->
+        <div class="modal" id="tradeModal">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-wide">
+                <div class="modal-header">
+                    <h3 id="modalTitle">Trade Stock</h3>
+                    <button class="modal-close" id="closeModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="trade-layout">
+                        <div class="trade-chart-section">
+                            <div class="stock-preview" id="stockPreview">
+                                <div class="stock-symbol-large" id="modalSymbol">DDOG</div>
+                                <div class="stock-name" id="modalStockName">Datadog, Inc.</div>
+                                <div class="stock-price-large" id="modalPrice">$135.00</div>
+                                <div class="stock-change-display" id="modalChange">+$5.00 (+3.85%)</div>
+                            </div>
+                            
+                            <div class="price-chart" id="priceChart">
+                                <div class="chart-header">
+                                    <span>90-Day Price History</span>
+                                    <span id="chartPerformance" class="chart-perf">+37.2%</span>
+                                </div>
+                                <div class="chart-container" id="chartContainer">
+                                    <!-- Chart will be rendered here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="trade-form-section">
+                            <div class="trade-type-selector">
+                                <button class="trade-type active" data-type="buy" id="buyBtn">
+                                    <span class="trade-icon">📈</span> BUY
+                                </button>
+                                <button class="trade-type" data-type="sell" id="sellBtn">
+                                    <span class="trade-icon">📉</span> SELL
+                                </button>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="quantity">Number of Shares</label>
+                                <div class="quantity-input">
+                                    <button class="qty-btn" id="qtyMinus">−</button>
+                                    <input type="number" id="quantity" min="1" value="1" class="input">
+                                    <button class="qty-btn" id="qtyPlus">+</button>
+                                </div>
+                                <div class="quick-qty">
+                                    <button class="quick-qty-btn" data-qty="1">1</button>
+                                    <button class="quick-qty-btn" data-qty="5">5</button>
+                                    <button class="quick-qty-btn" data-qty="10">10</button>
+                                    <button class="quick-qty-btn" data-qty="25">25</button>
+                                    <button class="quick-qty-btn" data-qty="100">100</button>
+                                </div>
+                            </div>
+                            
+                            <div class="order-summary">
+                                <div class="summary-row">
+                                    <span>Price per share</span>
+                                    <span id="pricePerShare">$135.00</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Quantity</span>
+                                    <span id="quantityDisplay">1 share</span>
+                                </div>
+                                <div class="summary-row total">
+                                    <span>Estimated Total</span>
+                                    <span id="estimatedTotal">$135.00</span>
+                                </div>
+                                <div class="summary-row available">
+                                    <span>Cash Available</span>
+                                    <span id="availableFunds">$10,000.00</span>
+                                </div>
+                                <div class="summary-row owned" id="sharesOwnedRow" style="display: none;">
+                                    <span>Shares Owned</span>
+                                    <span id="sharesOwned">0</span>
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-success btn-full btn-large" id="executeTrade">
+                                <span class="btn-icon">✓</span> Execute Buy Order
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Set Balance Modal -->
+        <div class="modal" id="balanceModal">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-small">
+                <div class="modal-header">
+                    <h3>💰 Set Account Balance</h3>
+                    <button class="modal-close" id="closeBalanceModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-description">Enter your starting cash balance for trading.</p>
+                    <div class="form-group">
+                        <label for="newBalance">Starting Balance ($)</label>
+                        <input type="number" id="newBalance" min="0" value="100000" class="input input-large">
+                    </div>
+                    <div class="quick-amounts">
+                        <button class="quick-amount" data-amount="10000">$10K</button>
+                        <button class="quick-amount" data-amount="50000">$50K</button>
+                        <button class="quick-amount" data-amount="100000">$100K</button>
+                        <button class="quick-amount" data-amount="500000">$500K</button>
+                        <button class="quick-amount" data-amount="1000000">$1M</button>
+                    </div>
+                    <button class="btn btn-primary btn-full btn-large" id="confirmBalance">Set Balance</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Modal -->
+        <div class="modal" id="metricsModal">
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3>📊 System Metrics</h3>
+                    <button class="modal-close" id="closeMetricsModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="metrics-note">
+                        <strong>⚠️ Manual Observability:</strong> This is how teams monitor systems WITHOUT proper observability tools.
+                        They manually track these metrics, grep through logs, and build custom dashboards. With Datadog, all this would be automatic!
+                    </p>
+                    <div class="metrics-grid" id="metricsGrid">
+                        <div class="loading">Loading metrics...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
